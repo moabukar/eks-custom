@@ -1,0 +1,90 @@
+image:
+  name: hashicorp/packer:1.5.4
+  entrypoint:
+    - "/usr/bin/env"
+    - "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+stages:
+  - packer-validate
+  - packer-build
+  - terraform-validate
+  - terraform-plan
+  - terraform-apply
+  - terraform-destroy
+
+packer-validate:
+  stage: packer-validate
+  script:
+    - cd packer
+    - packer validate -var-file=variables.json eks-worker-al2.json
+  only:
+    variables:
+      - $NEWIMG == "yes"
+
+packer-build:
+  stage: packer-build
+  script:
+    - cd packer
+    - packer build -var-file=variables.json eks-worker-al2.json
+  dependencies:
+    - packer-validate
+  only:
+    variables:
+      - $NEWIMG == "yes"
+
+terraform-validate:
+  image: hashicorp/terraform:0.12.16
+  stage: terraform-validate
+  script:
+    - rm -rf .terraform
+    - cd terraform
+    - terraform --version
+    - terraform init
+    - terraform validate
+
+terraform-plan:
+  image: hashicorp/terraform:0.12.16
+  stage: terraform-plan
+  script:
+    - rm -rf .terraform
+    - cd terraform
+    - terraform init
+    - terraform plan
+  dependencies:
+    - terraform-validate
+
+terraform-apply:
+  image: hashicorp/terraform:0.12.16
+  stage: terraform-apply
+  script:
+    - rm -rf .terraform
+    - cd terraform
+    - terraform --version
+    - terraform init
+    - terraform apply --auto-approve
+    - mkdir /temp
+    - mkdir /temp/eks-cluster
+    - terraform output kubeconfig > /temp/eks-cluster
+    - terraform output config-map > /temp/config-map-aws-auth.yaml
+  dependencies:
+    - terraform-plan
+  artifacts:
+    paths:
+      - /temp/eks-cluster
+      - /temp/config-map-aws-auth.yaml
+    expire_in: 1 week
+  when: manual
+
+terraform-destroy:
+  image: hashicorp/terraform:0.12.16
+  stage: terraform-destroy
+  script:
+    - rm -rf .terraform
+    - cd terraform
+    - terraform --version
+    - terraform init
+    - terraform destroy -force
+  dependencies:
+    - terraform-apply
+  when: manual
+  allow_failure: false

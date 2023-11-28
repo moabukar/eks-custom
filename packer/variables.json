@@ -1,0 +1,7 @@
+{
+  "ami_name": "custom_worker_ami_{{timestamp}}",
+  "instance_type": "t2.small",
+  "kubernetes_version": "1.14.9",
+  "kubernetes_build_date": "2020-01-22",
+  "arch": "x86_64"
+}
