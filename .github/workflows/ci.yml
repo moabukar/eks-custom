@@ -1,0 +1,104 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  packer-validate:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.newimg == 'yes' }}
+    container:
+      image: hashicorp/packer:1.5.4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Validate Packer Template
+        run: |
+          cd packer
+          packer validate -var-file=variables.json eks-worker-al2.json
+
+  packer-build:
+    needs: packer-validate
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.newimg == 'yes' }}
+    container:
+      image: hashicorp/packer:1.5.4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Build Packer Image
+        run: |
+          cd packer
+          packer build -var-file=variables.json eks-worker-al2.json
+
+  terraform-validate:
+    runs-on: ubuntu-latest
+    container:
+      image: hashicorp/terraform:0.12.16
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Terraform Validate
+        run: |
+          rm -rf .terraform
+          cd terraform
+          terraform --version
+          terraform init
+          terraform validate
+
+  terraform-plan:
+    needs: terraform-validate
+    runs-on: ubuntu-latest
+    container:
+      image: hashicorp/terraform:0.12.16
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Terraform Plan
+        run: |
+          rm -rf .terraform
+          cd terraform
+          terraform init
+          terraform plan
+
+  terraform-apply:
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    container:
+      image: hashicorp/terraform:0.12.16
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Terraform Apply
+        run: |
+          rm -rf .terraform
+          cd terraform
+          terraform --version
+          terraform init
+          terraform apply --auto-approve
+          mkdir /temp
+          mkdir /temp/eks-cluster
+          terraform output kubeconfig > /temp/eks-cluster
+          terraform output config-map > /temp/config-map-aws-auth.yaml
+    outputs:
+      eks-cluster: /temp/eks-cluster
+      config-map: /temp/config-map-aws-auth.yaml
+
+  terraform-destroy:
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    container:
+      image: hashicorp/terraform:0.12.16
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Terraform Destroy
+        run: |
+          rm -rf .terraform
+          cd terraform
+          terraform --version
+          terraform init
+          terraform destroy -force
