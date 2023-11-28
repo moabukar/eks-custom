@@ -15,3 +15,4 @@ Before the pipeline runs, you'll need to specifiy:
 - AWS_SESSION_TOKEN
 
 In the CI/CD secret settings of your repo.
+
